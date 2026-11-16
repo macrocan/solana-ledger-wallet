@@ -1,0 +1,24 @@
+{
+  "name": "sol-ledger-wallet",
+  "version": "2.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@ledgerhq/hw-app-solana": "7.4.0",
+    "@ledgerhq/hw-transport-webhid": "6.30.0",
+    "@solana/spl-token": "0.4.13",
+    "@solana/web3.js": "1.98.0",
+    "buffer": "6.0.3"
+  },
+  "devDependencies": {
+    "vite": "6.3.5",
+    "vite-plugin-node-polyfills": "0.23.0",
+    "vite-plugin-singlefile": "2.2.0"
+  }
+}

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- No host is allowed in script-src: only the code inlined into this file can run; any remote <script> is blocked. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https: wss: ws://127.0.0.1:*; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'" />
+<title>Solana Ledger 钱包 v2</title>
+<link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+<div class="wrap">
+  <h1>Solana Ledger 钱包 <span class="ver">v2.2</span></h1>
+  <div class="sub">仅连接 Ledger 签名 · SOL / 经典 SPL 代币转账 · 私钥不离开设备</div>
+
+  <section class="card" id="cardNetwork">
+    <h2>1 · 网络与设备</h2>
+    <div class="row">
+      <div>
+        <label for="cluster">集群</label>
+        <select id="cluster">
+          <option value="mainnet-beta">Mainnet</option>
+          <option value="devnet">Devnet</option>
+          <option value="testnet">Testnet</option>
+        </select>
+      </div>
+      <div style="flex:2 1 300px">
+        <label for="rpc">RPC 地址（留空用公共节点 publicnode / 官方 devnet；强烈建议填自己的 Helius / QuickNode；会校验创世哈希）</label>
+        <input id="rpc" placeholder="https://..." autocomplete="off" spellcheck="false" />
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div>
+        <label for="path">派生路径</label>
+        <input id="path" value="44'/501'/0'/0'" autocomplete="off" spellcheck="false" />
+      </div>
+      <div style="flex:0 0 auto">
+        <label>&nbsp;</label>
+        <button id="btnConnect">连接 Ledger</button>
+      </div>
+      <div style="flex:0 0 auto">
+        <label>&nbsp;</label>
+        <button id="btnDisconnect" class="secondary" disabled>断开</button>
+      </div>
+    </div>
+    <div class="hint">连接时会要求你在 Ledger 屏幕上核对并确认地址。连接后网络和路径会被锁定；要换网络请先断开。</div>
+    <div class="hint" id="netStatus"></div>
+  </section>
+
+  <section class="card" id="cardAccount" hidden>
+    <h2>2 · 账户</h2>
+    <div class="kv"><span class="k">地址</span><span class="addr" id="address"></span></div>
+    <div class="kv"><span class="k">网络</span><span id="netLabel"></span></div>
+    <div class="bal"><span id="sol">–</span> SOL</div>
+    <div class="row">
+      <button class="secondary" id="btnRefresh" style="flex:0 0 auto">刷新余额</button>
+      <span class="hint" id="refreshStatus" style="flex:1 1 auto"></span>
+    </div>
+    <div class="tokens" id="tokens"></div>
+    <div class="row" style="margin-top:8px">
+      <input id="mintInput" placeholder="按 mint 手动添加代币（节点不支持列表查询时）" autocomplete="off" spellcheck="false" style="flex:1 1 auto" />
+      <button class="secondary" id="btnAddMint" style="flex:0 0 auto">添加</button>
+    </div>
+  </section>
+
+  <section class="card" id="cardSend" hidden>
+    <h2>3 · 转账</h2>
+    <label for="asset">资产</label>
+    <select id="asset"></select>
+    <label for="to">收款地址（钱包主地址，不是代币账户）</label>
+    <input id="to" placeholder="收款方钱包地址" autocomplete="off" spellcheck="false" />
+    <label for="amount">数量</label>
+    <input id="amount" type="text" inputmode="decimal" placeholder="0.0" autocomplete="off" />
+    <label for="priority">优先费（microLamports / CU，留空或 0 = 不加；主网拥堵时填 10000–100000）</label>
+    <input id="priority" type="text" inputmode="numeric" placeholder="0" autocomplete="off" />
+    <div class="row" style="margin-top:14px">
+      <button id="btnBuild" style="flex:0 0 auto">核对交易</button>
+    </div>
+    <div class="hint">点"核对交易"后，页面会把实际构建出的交易解析出来给你看；确认无误再到 Ledger 签名。</div>
+  </section>
+
+  <section class="card review" id="cardReview" hidden>
+    <h2>4 · 核对（以下内容解析自将要签名的交易本身）</h2>
+    <div id="reviewBody"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="btnSign" style="flex:0 0 auto">确认无误，去 Ledger 签名</button>
+      <button id="btnCancel" class="secondary" style="flex:0 0 auto">取消</button>
+    </div>
+  </section>
+
+  <section class="card" id="cardJob" hidden>
+    <h2>5 · 交易状态</h2>
+    <div class="kv"><span class="k">状态</span><span id="jobState" class="state"></span></div>
+    <div class="kv"><span class="k">签名</span><span class="addr" id="jobSig"></span></div>
+    <div id="jobLink"></div>
+    <div class="hint" id="jobHint"></div>
+    <div class="row" style="margin-top:12px">
+      <button id="btnCheck" class="secondary" style="flex:0 0 auto" hidden>查询状态</button>
+      <button id="btnResend" class="secondary" style="flex:0 0 auto" hidden>重发同一笔已签名交易</button>
+      <button id="btnDone" class="secondary" style="flex:0 0 auto" hidden>关闭</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>日志</h2>
+    <div id="log"></div>
+  </section>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
