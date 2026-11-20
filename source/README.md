@@ -4,18 +4,26 @@
 
 ## 运行
 
+构建工具固定为 pnpm（版本见 `package.json` 的 `packageManager`）。首次使用先启用：
+
 ```bash
-npm install        # 第一次；会生成 package-lock.json，之后请提交它并改用 npm ci
-npm test           # 纯逻辑单元测试（不需要浏览器 / Ledger / RPC）
-npm run build      # 产物在 dist/
-npm run preview    # 在 http://127.0.0.1:4173 打开，用 Chrome / Edge 桌面版
+corepack enable && corepack prepare pnpm@10.18.0 --activate   # 或用 npm i -g pnpm
 ```
 
-`npm run build` 的产物是**单个文件** `dist/index.html`，JS 和 CSS 全部内联，运行时不再加载任何外部脚本。可以直接用 Chrome / Edge 双击打开（file://），也可以 `npm run preview` 在 localhost 打开。
+Node 版本要求见 `package.json` 的 `engines`（`>=20 <25`）与 `.nvmrc`；`.npmrc` 开了 `engine-strict`，版本不符会直接拒绝安装。
+
+```bash
+pnpm install --frozen-lockfile   # 按 pnpm-lock.yaml 精确还原，锁文件请随代码一起提交
+pnpm test                        # 纯逻辑单元测试（不需要浏览器 / Ledger / RPC）
+pnpm build                       # 产物在 dist/
+pnpm preview                     # 在 http://127.0.0.1:4173 打开，用 Chrome / Edge 桌面版
+```
+
+`pnpm build` 的产物是**单个文件** `dist/index.html`，JS 和 CSS 全部内联，运行时不再加载任何外部脚本。可以直接用 Chrome / Edge 双击打开（file://），也可以 `pnpm preview` 在 localhost 打开。
 
 两种打开方式的区别：file:// 下所有本地 HTML 共用一个 localStorage 源，未完结交易记录会被同目录其它 file:// 页面看到；只在你自己电脑上用的话影响不大。如果你的 Chrome 对 file:// 页面禁用了 WebHID（企业策略有时会），改用 preview。
 
-`npm run dev` 是开发模式，依赖按文件加载；正式划转请用 build 产物。
+`pnpm dev` 是开发模式，依赖按文件加载；正式划转请用 build 产物。
 
 ## 使用
 

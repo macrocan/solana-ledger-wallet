@@ -71,8 +71,8 @@
     <input id="to" placeholder="收款方钱包地址" autocomplete="off" spellcheck="false" />
     <label for="amount">数量</label>
     <input id="amount" type="text" inputmode="decimal" placeholder="0.0" autocomplete="off" />
-    <label for="priority">优先费（microLamports / CU，留空或 0 = 不加；主网拥堵时填 10000–100000）</label>
-    <input id="priority" type="text" inputmode="numeric" placeholder="0" autocomplete="off" />
+    <label for="priority">优先费（microLamports / CU，留空或 0 = 不加；主网拥堵时填 10000–100000；上限 100000000）</label>
+    <input id="priority" type="text" inputmode="numeric" placeholder="0" maxlength="9" autocomplete="off" />
     <div class="row" style="margin-top:14px">
       <button id="btnBuild" style="flex:0 0 auto">核对交易</button>
     </div>

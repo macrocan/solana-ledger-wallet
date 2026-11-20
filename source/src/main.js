@@ -419,12 +419,13 @@ function startPolling(record) {
   stopPolling();
   const gen = ++pollGen;
   let tick = 0;
+  let expiryStreak = 0; // consecutive "signature missing AND height past expiry" observations
   const loop = async () => {
     pollTimer = null;
     if (!session || active !== record || gen !== pollGen) return;
     try {
-      // 先读区块高度，再查签名状态。顺序不能反：若先查状态(空)再读高度(已超过有效期)，
-      // 中间落地的交易会被误判为"已过期可重发"，导致重复付款。
+      // 先读区块高度，再查签名状态（同单节点内先高度后状态可避免"先查空后超期"的误判）。
+      // 但跨节点（LB）仍可能高度领先、状态落后，所以 EXPIRED 还要经 shouldDeclareExpired 二次确认。
       const height = await session.connection.getBlockHeight("confirmed");
       const st = await session.connection.getSignatureStatuses([record.signature], { searchTransactionHistory: true });
       if (gen !== pollGen) return;
@@ -432,7 +433,16 @@ function startPolling(record) {
       const next = C.decideStatus({ status, blockHeight: height, lastValidBlockHeight: record.lastValidBlockHeight });
       if (next === C.S.CONFIRMED) { finish(C.S.CONFIRMED, "交易已确认 ✅"); return; }
       if (next === C.S.FAILED_ONCHAIN) { finish(C.S.FAILED_ONCHAIN, `链上执行失败：${JSON.stringify(status.err)}`); return; }
-      if (next === C.S.EXPIRED) { finish(C.S.EXPIRED, "blockhash 已过期且链上未见该签名，这笔交易不会再被打包。可以安全地重新构建一笔新交易。"); return; }
+      if (next === C.S.EXPIRED) {
+        expiryStreak++;
+        // 连续足够多次都查不到，才认定过期；否则继续轮询（宁可多等，也不误导重签）
+        if (C.shouldDeclareExpired({ blockHeight: height, lastValidBlockHeight: record.lastValidBlockHeight, streak: expiryStreak })) {
+          finish(C.S.EXPIRED, "blockhash 已过期且链上未见该签名，这笔交易不会再被打包。可以安全地重新构建一笔新交易。");
+          return;
+        }
+      } else if (status) {
+        expiryStreak = 0; // 一旦看到签名，重置过期计数
+      }
       if (job.state === C.S.UNKNOWN) setState(C.S.PENDING);
       // still pending: rebroadcast the SAME signed bytes every few ticks (idempotent)
       if (!status && tick > 0 && tick % 3 === 0) { try { await session.connection.sendRawTransaction(Buffer.from(record.rawTxB64, "base64"), { skipPreflight: true, maxRetries: 0 }); } catch {} }

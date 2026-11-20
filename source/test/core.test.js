@@ -154,6 +154,18 @@ test("decideStatus: confirmed / failed / expired / still pending", () => {
   assert.equal(C.decideStatus({ status: null, blockHeight: 1001, lastValidBlockHeight: lv }), "EXPIRED");
 });
 
+test("shouldDeclareExpired: a single 'height past expiry, signature missing' observation is NOT enough (LB skew)", () => {
+  const lv = 1000;
+  // 落后节点查不到签名、领先节点报高度已超期：单次观测不能判过期
+  assert.equal(C.shouldDeclareExpired({ blockHeight: 1001, lastValidBlockHeight: lv, streak: 1 }), false);
+  // 连续 EXPIRY_CONFIRMATIONS 次才认定
+  assert.equal(C.shouldDeclareExpired({ blockHeight: 1001, lastValidBlockHeight: lv, streak: C.EXPIRY_CONFIRMATIONS }), true);
+  // 高度还没越过有效期时，无论 streak 多大都不判过期
+  assert.equal(C.shouldDeclareExpired({ blockHeight: 1000, lastValidBlockHeight: lv, streak: 99 }), false);
+  // 自定义阈值
+  assert.equal(C.shouldDeclareExpired({ blockHeight: 1001, lastValidBlockHeight: lv, streak: 3, threshold: 3 }), true);
+});
+
 test("regression (review #3): simulated 'RPC accepted but response lost' resolves to CONFIRMED via original signature, no re-sign", () => {
   // Simulate main.js's broadcast(): sendRawTransaction throws a network error
   // after the RPC actually accepted the tx. Then polling sees it confirmed.
@@ -220,6 +232,15 @@ test("priority fee: parse + ceil division", () => {
   assert.equal(C.priorityFeeLamports(450, 0n), 0n);
   assert.equal(C.priorityFeeLamports(60_000, 10_000n), 600n);
   assert.equal(C.priorityFeeLamports(450, 1n), 1n); // rounds up
+});
+
+test("priority fee: hard cap rejects absurd values (guards against extra zeros)", () => {
+  assert.equal(C.parseMicroLamports(String(C.MAX_PRIORITY_MICROLAMPORTS)), C.MAX_PRIORITY_MICROLAMPORTS); // boundary ok
+  assert.throws(() => C.parseMicroLamports(String(C.MAX_PRIORITY_MICROLAMPORTS + 1n)));
+  assert.throws(() => C.parseMicroLamports("10000000000")); // 11 digits, way over
+  assert.throws(() => C.parseMicroLamports("1234567890")); // 10 digits fails the \d{1,9} regex
+  // worst-case TOKEN fee at the cap stays bounded (~0.006 SOL), never unbounded
+  assert.equal(C.priorityFeeLamports(60_000, C.MAX_PRIORITY_MICROLAMPORTS), 6_000_000n);
 });
 
 test("PUBLIC_RPC mainnet is not the official endpoint (it blocks browsers)", () => {

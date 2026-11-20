@@ -24,12 +24,19 @@ export const PUBLIC_RPC = Object.freeze({
 
 export const DEFAULT_CU_LIMIT = { SOL: 450, TOKEN: 60_000 }; // 实测上限的 1.5-2 倍，留余量
 
-/** "0" / "1000" microLamports per CU -> bigint; empty = 0. */
+// 优先费上限（microLamports / CU）。防止误输多个 0 导致天价手续费。
+// 100_000_000 microLamports/CU 时最坏（TOKEN 60_000 CU）手续费约 0.006 SOL，仍是真实拥堵价（通常 1万-100万）的 100 倍以上余量，
+// 把原本无天花板（12 位数字可到约 60 SOL）压到有限范围。
+export const MAX_PRIORITY_MICROLAMPORTS = 100_000_000n;
+
+/** "0" / "1000" microLamports per CU -> bigint; empty = 0. Throws if over MAX_PRIORITY_MICROLAMPORTS. */
 export function parseMicroLamports(str) {
   const s = String(str ?? "").trim();
   if (!s) return 0n;
-  if (!/^\d{1,12}$/.test(s)) throw new Error("优先费格式不正确（整数 microLamports/CU）");
-  return BigInt(s);
+  if (!/^\d{1,9}$/.test(s)) throw new Error("优先费格式不正确（整数 microLamports/CU）");
+  const v = BigInt(s);
+  if (v > MAX_PRIORITY_MICROLAMPORTS) throw new Error(`优先费过高（上限 ${MAX_PRIORITY_MICROLAMPORTS} microLamports/CU）`);
+  return v;
 }
 
 /** Priority fee in lamports, rounded up. */
@@ -265,6 +272,12 @@ export function classifyBroadcastError(err) {
   return S.UNKNOWN;
 }
 
+// blockhash 过期判定需要连续观测到的次数。RPC 背后常是负载均衡（Helius / QuickNode），
+// getBlockHeight 与 getSignatureStatuses 可能落到进度不同的节点：领先节点报高度已越过有效期，
+// 落后节点查不到签名。单次观测就判 EXPIRED 会把"其实已上链"的交易误判为过期，引导用户重签造成重复付款。
+// 因此要求连续 EXPIRY_CONFIRMATIONS 次都观测到"签名不存在 且 高度已越过有效期"才认定过期。
+export const EXPIRY_CONFIRMATIONS = 2;
+
 /**
  * Decide a pending tx's state from getSignatureStatuses + current block height.
  * status: null | { confirmationStatus, err }
@@ -277,6 +290,16 @@ export function decideStatus({ status, blockHeight, lastValidBlockHeight }) {
   }
   if (blockHeight > lastValidBlockHeight) return S.EXPIRED;
   return S.PENDING;
+}
+
+/**
+ * Guard the EXPIRED verdict against cross-node height skew.
+ * Returns true only after `streak` consecutive observations of "signature missing AND height past lastValidBlockHeight".
+ * streak: how many consecutive such observations (including this one) have been seen.
+ * threshold: required confirmations (default EXPIRY_CONFIRMATIONS).
+ */
+export function shouldDeclareExpired({ blockHeight, lastValidBlockHeight, streak, threshold = EXPIRY_CONFIRMATIONS }) {
+  return blockHeight > lastValidBlockHeight && streak >= threshold;
 }
 
 // ---------- base58 (tiny encoder so we don't add a dependency just for signatures) ----------
