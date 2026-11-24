@@ -108,6 +108,31 @@ export function isBase58(s) {
   return typeof s === "string" && BASE58_RE.test(s);
 }
 
+// 核对页展示的关键字段：用户在页面上亲眼确认的就是这几个。签名前会拿"即将签的这笔 tx"
+// 重新解析一遍，与这些字段逐项比对；任何一项变了都拒绝签名。这挡住了"确认之后、签名之前
+// 页面状态被改写（XSS 或注入）导致实际签的是另一笔交易"的路径。
+//
+// 不比较 `from`：decodeForReview 不输出 sender（它在解析时直接断言转出方必须是 owner，
+// 否则抛错），因此比对 from 只会让每一笔正常交易都被误拦。转出方安全由解码器的断言保证。
+const SUMMARY_KEY_FIELDS = ["asset", "to", "amount", "mint", "destAta", "sourceAccount", "priorityMicroLamports"];
+
+/**
+ * Compare the review-time summary against the freshly re-decoded summary of the tx about to be signed.
+ * Returns { ok, reason }. Strict: any missing/differing key field fails closed.
+ * Non-key fields (fee, ataRent, display strings, cluster) are intentionally excluded — fee can't
+ * be changed by an attacker without changing the message the user already approved on-screen.
+ */
+export function summariesMatch(reviewed, decoded) {
+  const a = reviewed && reviewed.summary ? reviewed.summary : reviewed;
+  if (!a || !decoded) return { ok: false, reason: "摘要缺失" };
+  for (const k of SUMMARY_KEY_FIELDS) {
+    const av = a[k] ?? null;
+    const bv = decoded[k] ?? null;
+    if (av !== bv) return { ok: false, reason: `核对内容与即将签名的不一致：${k}` };
+  }
+  return { ok: true, reason: "" };
+}
+
 // ---------- assets ----------
 
 /** Stable identity for a token position. Never use array indexes. */

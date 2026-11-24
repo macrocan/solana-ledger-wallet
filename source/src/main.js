@@ -288,8 +288,12 @@ async function build() {
       summary.to = to.toBase58();
     }
 
-    draft = { tx, summary, blockhash, lastValidBlockHeight };
-    renderReview(summary);
+    // Freeze the reviewed summary so post-confirm tampering can't silently rewrite what the user saw.
+    // The real defence is in sign(): it re-decodes the tx it is about to sign and compares against
+    // this frozen summary. (draft/tx stay mutable — sign() refreshes blockhash fields before signing.)
+    const reviewed = Object.freeze({ ...summary });
+    draft = { tx, summary: reviewed, blockhash, lastValidBlockHeight };
+    renderReview(reviewed);
     setState(C.S.REVIEW);
   } catch (e) {
     draft = null;
@@ -341,6 +345,8 @@ function decodeForReview(tx, owner) {
 
 function renderReview(sm) {
   const body = $("reviewBody"); clear(body);
+  const notice = el("div", "review-warn", "⚠ 本页面应只来自你自行构建或官方发布的 index.html 文件。若你是从他人发来的链接打开，请先关掉、改用可信来源的同一文件。最终以 Ledger 屏幕显示为准。");
+  body.appendChild(notice);
   const row = (k, v, big = false) => { const r = el("div", "review-row"); r.appendChild(el("span", "k", k)); r.appendChild(el("span", big ? "v big" : "v", v)); body.appendChild(r); };
   row("网络", sm.cluster);
   row("从", sm.from);
@@ -362,6 +368,13 @@ async function sign() {
   setState(C.S.SIGNING);
   let record;
   try {
+    // Re-decode the exact tx we are about to sign and compare against what the user confirmed on the
+    // review page. Catches any post-confirm tampering that swapped instructions before we hand it to
+    // the Ledger. Falls closed: a mismatch aborts signing and never reaches the device.
+    let decodedNow;
+    try { decodedNow = decodeForReview(d.tx, s.owner); } catch (e) { throw new Error(`签名前复核失败：${e?.message || e}`); }
+    const match = C.summariesMatch(d.summary, decodedNow);
+    if (!match.ok) throw new Error(match.reason);
     log("请在 Ledger 上核对并确认交易…");
     // 核对可能花几分钟，签名前重新取 blockhash，减少"签完就过期"；交易内容不变
     const fresh = await s.connection.getLatestBlockhash("confirmed");

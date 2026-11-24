@@ -43,6 +43,25 @@ test("explorerTxUrl validates signature shape", () => {
   assert.throws(() => C.explorerTxUrl("abc", "devnet"));
 });
 
+// ---------- review↔sign binding (defends "confirm, then state flips to another tx") ----------
+test("summariesMatch: identical key fields pass; any changed key field fails closed", () => {
+  // decodeForReview never emits `from` (it asserts sender==owner instead), so decoded carries no `from`.
+  const reviewed = { summary: { asset: "SOL", to: "B", amount: "1", mint: null, destAta: null, sourceAccount: null, priorityMicroLamports: null, from: "A", fee: "0.000005" } };
+  const decoded = { asset: "SOL", to: "B", amount: "1", mint: null, destAta: null, sourceAccount: null, priorityMicroLamports: null };
+  assert.equal(C.summariesMatch(reviewed, decoded).ok, true); // fee/from differences don't matter
+  for (const [k, v] of [["to", "EVIL"], ["amount", "1000"], ["asset", "TOKEN"], ["mint", "M"], ["destAta", "ACCT"], ["priorityMicroLamports", "999"]]) {
+    const r = C.summariesMatch(reviewed, { ...decoded, [k]: v });
+    assert.equal(r.ok, false, `changing ${k} must fail`);
+    assert.match(r.reason, /不一致/);
+  }
+});
+
+test("summariesMatch: fails closed on missing summaries", () => {
+  assert.equal(C.summariesMatch(null, { asset: "SOL" }).ok, false);
+  assert.equal(C.summariesMatch({ summary: null }, { asset: "SOL" }).ok, false);
+  assert.equal(C.summariesMatch({ summary: { asset: "SOL" } }, null).ok, false);
+});
+
 // ---------- assets ----------
 const MINT_A = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const MINT_B = "So11111111111111111111111111111111111111112";

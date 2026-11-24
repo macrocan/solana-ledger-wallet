@@ -29,6 +29,7 @@ button[hidden] { display: none; }
 .tok .tag { color: var(--warn); font-size: 11px; }
 .tok .amt { text-align: right; font-weight: 600; }
 .review-row { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+.review-warn { margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--warn); border-radius: 8px; background: rgba(255,182,72,.08); color: var(--warn); font-size: 12px; line-height: 1.5; }
 .review-row .k { color: var(--muted); }
 .review-row .v { font-family: ui-monospace, Menlo, monospace; word-break: break-all; }
 .review-row .v.big { font-size: 20px; font-weight: 700; font-family: inherit; }
